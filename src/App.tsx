@@ -7,6 +7,7 @@ import { About } from './pages/About';
 import { MainApp } from './pages/MainApp';
 import { Terms } from './pages/Terms';
 import { Subscription } from './pages/Subscription';
+import { SubscriptionPage } from './pages/SubscriptionPage';
 import { Privacy } from './pages/Privacy';
 import { Refund } from './pages/Refund';
 import { Contact } from './pages/Contact';
@@ -85,6 +86,7 @@ export default function App() {
       <Route path="/app/history" element={<AnalysisHistory />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/subscription" element={<Subscription />} />
+      <Route path="/app/subscription" element={<SubscriptionPage />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/refund" element={<Refund />} />
       <Route path="/contact" element={<Contact />} />
