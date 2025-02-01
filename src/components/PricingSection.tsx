@@ -5,6 +5,7 @@ import { useCurrency } from '../hooks/useCurrency';
 import { convertPrice, formatPrice } from '../utils/currencyUtils';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase-client';
+import Subscribe from "./Subscribe";
 
 interface PricingFeature {
   text: string;
@@ -23,7 +24,7 @@ interface PricingPlan {
 
 const plans: PricingPlan[] = [
   {
-    id: 'basic',
+    id: 'plan_Pl068ztAi9mX4o',
     name: 'Basic',
     priceUSD: 6.99,
     description: 'Perfect for beginners and casual traders',
@@ -41,7 +42,7 @@ const plans: PricingPlan[] = [
     ],
   },
   {
-    id: 'pro',
+    id: 'plan_Pl06njh855KGVZ',
     name: 'Pro',
     priceUSD: 12.99,
     description: 'For serious traders who need more power',
@@ -60,7 +61,7 @@ const plans: PricingPlan[] = [
     ],
   },
   {
-    id: 'elite',
+    id: 'plan_Pl07O84sDPzQIN',
     name: 'Elite',
     priceUSD: 22.99,
     description: 'Maximum power for professional traders',
@@ -124,6 +125,7 @@ export function PricingSection() {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Select the plan that best fits your trading needs and take your analysis to the next level
           </p>
+          <Subscribe planId="plan_Pl068ztAi9mX4o" userEmail="officiallk09@gmail.com" />
         </div>
 
         {loading ? (
@@ -190,3 +192,5 @@ export function PricingSection() {
     </div>
   );
 }
+
+export default Subscribe;
