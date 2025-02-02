@@ -1,10 +1,10 @@
 import React from 'react';
 import { Check } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '../hooks/useCurrency';
 import { convertPrice, formatPrice } from '../utils/currencyUtils';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase-client';
+import Subscribe from './Subscribe';
 
 interface PricingFeature {
   text: string;
@@ -82,21 +82,10 @@ const plans: PricingPlan[] = [
 export function PricingSectionNew() {
   const { currency, loading } = useCurrency();
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const [selectedPlan, setSelectedPlan] = React.useState<PricingPlan | null>(null);
 
   const handleSubscribe = async (plan: PricingPlan) => {
-    try {
-      if (!user) {
-        localStorage.setItem('selectedPlan', JSON.stringify(plan));
-        navigate('/signin');
-        return;
-      }
-
-      navigate('/payment', { state: { plan } });
-    } catch (error) {
-      console.error('Subscription error:', error);
-      alert('Failed to process subscription. Please try again.');
-    }
+    setSelectedPlan(plan);
   };
 
   return (
@@ -135,16 +124,23 @@ export function PricingSectionNew() {
                     <span className="text-gray-600">/week</span>
                   </div>
                   <p className="text-gray-600 mb-6">{plan.description}</p>
-                  <button
-                    onClick={() => handleSubscribe(plan)}
-                    className={`w-full px-6 py-3 rounded-md font-medium transition-colors ${
-                      plan.highlighted
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                    }`}
-                  >
-                    Get Started
-                  </button>
+                  {selectedPlan?.id === plan.id ? (
+                    <Subscribe 
+                      planId={plan.id} 
+                      userEmail={user?.email || 'officiallk09@gmail.com'} 
+                    />
+                  ) : (
+                    <button
+                      onClick={() => handleSubscribe(plan)}
+                      className={`w-full px-6 py-3 rounded-md font-medium transition-colors ${
+                        plan.highlighted
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                      }`}
+                    >
+                      Get Started
+                    </button>
+                  )}
                 </div>
 
                 <div className="border-t border-gray-100 px-8 py-6">
