@@ -1,103 +1,112 @@
 const express = require('express');
 const Razorpay = require('razorpay');
 const cors = require('cors');
-const crypto = require('crypto');
+const bodyParser = require("body-parser");
+const crypto = require("crypto");
 require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
+app.use(cors());
+app.use(bodyParser.json());
 
-// Configure CORS to allow requests from your frontend
-app.use(cors({
-  origin: '*', // Update this with your frontend URL in production
-  credentials: true
-}));
+// Initialize Supabase
+const supabase = createClient(
+    process.env.SUPABASE_URL, 
+    process.env.SUPABASE_SERVICE_ROLE_KEY // Use a secure env variable
+);
 
-app.use(express.json());
-
-// Add health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    service: 'CandlyzeAI Backend',
-    razorpay: {
-      keyId: process.env.RAZORPAY_KEY_ID ? 'configured' : 'missing',
-      keySecret: process.env.RAZORPAY_KEY_SECRET ? 'configured' : 'missing'
-    }
-  });
-});
-
+// Initialize Razorpay instance
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET
+    key_id: process.env.VITE_RAZORPAY_KEY_ID,
+    key_secret: process.env.VITE_RAZORPAY_KEY_SECRET,
 });
 
-// Add a test endpoint to verify Razorpay credentials
-app.get('/api/test-razorpay', async (req, res) => {
-  try {
-    // Try to fetch a list of plans to verify credentials
-    const plans = await razorpay.plans.all();
-    res.json({ 
-      status: 'success',
-      message: 'Razorpay credentials are valid',
-      plans_count: plans.count
-    });
-  } catch (error) {
-    console.error('Razorpay test error:', error);
-    res.status(500).json({ 
-      status: 'error',
-      message: 'Razorpay credentials are invalid',
-      error: error.message
-    });
-  }
-});
+// Route to check subscription status
+app.get("/check-subscription", async (req, res) => {
+    const { email } = req.query;
 
-// Create order endpoint
-app.post('/api/create-order', async (req, res) => {
-  try {
-    const { amount, currency = 'INR' } = req.body;
+    try {
+        // Fetch user subscription data from Supabase
+        const { data, error } = await supabase
+            .from("subscriptions")
+            .select("*")
+            .eq("email", email)
+            .eq("status", "active");
 
-    const options = {
-      amount: amount * 100, // Convert to paise
-      currency,
-      receipt: `receipt_${Date.now()}`,
-    };
-
-    const order = await razorpay.orders.create(options);
-    res.json(order);
-  } catch (error) {
-    console.error('Error creating order:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Verify payment endpoint
-app.post('/api/verify-payment', async (req, res) => {
-  try {
-    const {
-      razorpay_payment_id,
-      razorpay_order_id,
-      razorpay_signature
-    } = req.body;
-
-    const sign = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSign = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(sign)
-      .digest("hex");
-
-    if (razorpay_signature === expectedSign) {
-      res.json({ verified: true });
-    } else {
-      res.status(400).json({ error: 'Invalid signature' });
+        if (error) throw error;
+        
+        const isActive = data.length > 0;
+        res.json({ isActive });
+    } catch (error) {
+        console.error("Error fetching subscription:", error);
+        res.status(500).json({ isActive: false, error: "Failed to fetch subscription" });
     }
-  } catch (error) {
-    console.error('Error verifying payment:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Route to create a new subscription
+app.post("/create-subscription", async (req, res) => {
+    try {
+        const { planId, customerEmail, userId } = req.body;
+
+        const subscription = await razorpay.subscriptions.create({
+            plan_id: planId, // Razorpay Plan ID
+            customer_notify: 1,
+            total_count: 12, // Number of billing cycles (monthly)
+            notes: { email: customerEmail, user_id: userId },
+        });
+
+        res.json({ subscriptionId: subscription.id });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
+
+// Razorpay Webhook Endpoint for Payment Confirmation
+app.post("/webhook", async (req, res) => {
+    try {
+        const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        const signature = req.headers["x-razorpay-signature"];
+        const body = JSON.stringify(req.body);
+
+        // Verify Razorpay Signature
+        const expectedSignature = crypto.createHmac("sha256", secret)
+            .update(body)
+            .digest("hex");
+
+        if (signature !== expectedSignature) {
+            return res.status(400).json({ error: "Invalid signature" });
+        }
+
+        const event = req.body;
+
+        if (event.event === "subscription.activated") {
+            const userId = event.payload.subscription.entity.notes.user_id;
+            const email = event.payload.subscription.entity.notes.email;
+            const planId = event.payload.subscription.entity.plan_id;
+
+            // Update Supabase to mark subscription as active
+            const { data, error } = await supabase
+                .from("subscriptions")
+                .insert([{ 
+                    user_id: userId,
+                    email: email,
+                    status: "active",
+                    plan_id: planId,
+                    start_date: new Date()
+                }]);
+
+            if (error) throw error;
+            console.log("Subscription activated:", data);
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error("Webhook Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Start the server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
